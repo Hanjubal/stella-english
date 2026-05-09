@@ -9,8 +9,9 @@ const speak = (text, lang = "en-US") => {
 const norm = s => s.replace(/[.,!?;:'"''""\-—()[\]{}…·]+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
 let actx = null;
-const keySound = () => { try { if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=800+Math.random()*400;o.type="sine"; g.gain.value=0.03;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.08); o.start();o.stop(actx.currentTime+0.08); } catch{} };
-const okSound = () => { try { if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)(); [523,659,784].forEach((f,i)=>{ const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=f;o.type="sine"; g.gain.value=0.06;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.15+i*0.1); o.start(actx.currentTime+i*0.1);o.stop(actx.currentTime+0.15+i*0.1); }); } catch{} };
+const initAudio=()=>{if(!actx)try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch{}};
+const keySound = () => { try { initAudio();if(!actx)return;const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=800+Math.random()*400;o.type="sine"; g.gain.value=0.04;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.06); o.start();o.stop(actx.currentTime+0.06); } catch{} };
+const okSound = () => { try { initAudio();if(!actx)return;[523,659,784].forEach((f,i)=>{ const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=f;o.type="sine"; g.gain.value=0.06;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.15+i*0.1); o.start(actx.currentTime+i*0.1);o.stop(actx.currentTime+0.15+i*0.1); }); } catch{} };
 
 const P=[
 {p:48,l:"Lesson 3",t:"Different Attitudes (도입)",s:[{e:"The school dance contest is next month",k:"학교 댄스 대회가 다음 달이야"},{e:"Let's enter the dance contest",k:"댄스 대회에 참가하자"},{e:"Are you kidding",k:"농담이야"},{e:"We are all terrible dancers",k:"우리는 모두 춤을 못 춰"}]},
@@ -55,6 +56,12 @@ export default function App(){
   const[todayDone,setTodayDone]=useState(()=>{try{const t=new Date().toISOString().split("T")[0];return JSON.parse(localStorage.getItem("stella_today_"+t)||"[]")}catch{return[]}});
   const ref=useRef(null);
   const prevLen=useRef(0);
+  const guideRef=useRef(null);
+  const typedRef=useRef("");
+  const compRef=useRef(false);
+
+  // 첫 터치로 AudioContext 초기화
+  useEffect(()=>{const h=()=>{initAudio();document.removeEventListener("touchstart",h);document.removeEventListener("click",h)};document.addEventListener("touchstart",h);document.addEventListener("click",h);return()=>{document.removeEventListener("touchstart",h);document.removeEventListener("click",h)}},[]);
 
   useEffect(()=>{try{localStorage.setItem("stella_coin",String(coin))}catch{}},[coin]);
   useEffect(()=>{try{localStorage.setItem("stella_total",String(tot))}catch{}},[tot]);
@@ -65,46 +72,42 @@ export default function App(){
   useEffect(()=>{ref.current?.focus()},[phase,idx,step,fb]);
   useEffect(()=>{if(phase===1&&step===0&&cur.e)setTimeout(()=>speak(cur.e,"en-US"),300)},[phase,idx]);
 
-  const reset=()=>{setIdx(0);setStep(0);setTyped("");setFb(null);setCombo(0);setMxCombo(0);setScore(0);setErrors([]);prevLen.current=0};
-  const addCoin=(a)=>{setCoin(c=>c+a);setCoinAnim(a);setTimeout(()=>setCoinAnim(null),800)};
-
-  const onChange=(e)=>{
-    // React state 업데이트는 하되 DOM 조작을 먼저 즉시 실행
-    const v=e.target.value;
-    if(v.length>prevLen.current)keySound();
-    prevLen.current=v.length;
-    // DOM 직접 조작 — 즉각 반응
-    if(guideRef.current&&phase===1&&!fb){
-      const spans=guideRef.current.querySelectorAll("[data-gi]");
-      const tArr=[...v];const enC=step===0?C.en:C.kr;
+  // 네이티브 input 이벤트 바인딩 — React 리렌더 없이 DOM 직접 조작
+  useEffect(()=>{
+    const inp=ref.current;if(!inp||phase!==1)return;
+    const handler=(e)=>{
+      const v=inp.value;
+      if(v.length>prevLen.current)keySound();
+      prevLen.current=v.length;
+      typedRef.current=v;
+      // DOM 직접 색칠 — 즉각 반응
+      const g=guideRef.current;if(!g)return;
+      const spans=g.querySelectorAll("[data-gi]");
+      const tArr=[...v];const enC=step===0?"#60a5fa":"#6ee7b7";
       for(let i=0;i<spans.length;i++){
         const sp=spans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
         const tc=tArr[i];
-        if(tc!=null){
-          sp.style.color=tc.toLowerCase()===ch?enC:"#fb923c";
-          sp.style.fontWeight="700";
-        }else{
-          sp.style.color=C.ghost;
-          sp.style.fontWeight="400";
-        }
+        if(tc!=null){sp.style.color=tc.toLowerCase()===ch?enC:"#fb923c";sp.style.fontWeight="700"}
+        else{sp.style.color="rgba(255,255,255,0.15)";sp.style.fontWeight="400"}
       }
-      const cursors=guideRef.current.querySelectorAll("[data-cur]");
-      for(let i=0;i<cursors.length;i++){
-        cursors[i].style.display=i===v.length?"inline":"none";
-      }
-    }
-    setTyped(v);
-  };
+      const curs=g.querySelectorAll("[data-cur]");
+      for(let i=0;i<curs.length;i++)curs[i].style.display=i===v.length?"inline":"none";
+    };
+    inp.addEventListener("input",handler);
+    return()=>inp.removeEventListener("input",handler);
+  },[phase,step,idx,target]);
 
-  const guideRef=useRef(null);
+  const reset=()=>{setIdx(0);setStep(0);setTyped("");setFb(null);setCombo(0);setMxCombo(0);setScore(0);setErrors([]);prevLen.current=0;typedRef.current="";if(ref.current)ref.current.value=""};
+  const addCoin=(a)=>{setCoin(c=>c+a);setCoinAnim(a);setTimeout(()=>setCoinAnim(null),800)};
 
   const submit=()=>{
-    if(comp)return;const t=typed.trim();if(!t)return;
-    // 1차: norm 완전 일치 → 즉시 통과
+    if(compRef.current)return;
+    const t=(typedRef.current||"").trim();if(!t)return;
     const normT=norm(t);const normG=norm(target);
+    // 1차: 완전 일치
     if(normT===normG){
       okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
-      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
+      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value="";
         if(step===0){setStep(1)}else{setStep(0);
           if(idx+1<lines.length)setIdx(idx+1);
           else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
@@ -112,21 +115,19 @@ export default function App(){
       return;
     }
     // 2차: 90% 글자 비교
-    const tChars=[...normT];const gChars=[...normG];
-    let matched=0;const len=Math.min(tChars.length,gChars.length);
-    for(let i=0;i<len;i++){if(tChars[i]===gChars[i])matched++}
-    const accuracy=gChars.length>0?matched/gChars.length:0;
-    if(accuracy>=0.9){
-      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:`${Math.round(accuracy*100)}% 통과! +${100+b}🪙`});
-      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
+    const tC=[...normT];const gC=[...normG];let m=0;const len=Math.min(tC.length,gC.length);
+    for(let i=0;i<len;i++)if(tC[i]===gC[i])m++;
+    const acc=gC.length>0?m/gC.length:0;
+    if(acc>=0.9){
+      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:`${Math.round(acc*100)}% 통과! +${100+b}🪙`});
+      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value="";
         if(step===0){setStep(1)}else{setStep(0);
           if(idx+1<lines.length)setIdx(idx+1);
           else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
       },900);
     } else {
-      setCombo(0);
-      setFb({ok:false,msg:`${Math.round(accuracy*100)}% — 다시 치세요`});
-      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0},1200);
+      setCombo(0);setFb({ok:false,msg:`${Math.round(acc*100)}% — 다시 치세요`});
+      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value=""},1200);
     }
   };
 
@@ -218,14 +219,14 @@ export default function App(){
               <span key={i}><span data-cur="1" style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",display:i===0&&!fb?"inline":"none"}}/><span data-gi="1" data-ch={ch} style={{color:C.ghost,fontWeight:400}}>{ch}</span></span>
             )}
           </div>
-          <input ref={ref} value={typed} onChange={onChange}
-            onCompositionStart={()=>setComp(true)} onCompositionEnd={e=>{setComp(false);setTyped(e.target.value);prevLen.current=e.target.value.length}}
-            onKeyDown={e=>{if(e.key==="Enter"&&!comp)submit()}}
+          <input ref={ref} defaultValue=""
+            onCompositionStart={()=>{compRef.current=true}} onCompositionEnd={e=>{compRef.current=false;typedRef.current=e.target.value;prevLen.current=e.target.value.length}}
+            onKeyDown={e=>{if(e.key==="Enter"&&!compRef.current)submit()}}
             style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,fontSize:18,fontFamily:F}} autoComplete="off" spellCheck={false} autoCapitalize="off"/>
         </div>
 
         {fb&&<div style={{marginTop:10,padding:"10px 14px",borderRadius:10,textAlign:"center",background:fb.ok?"rgba(74,222,128,0.1)":"rgba(248,113,113,0.08)",color:fb.ok?C.ok:C.no,fontSize:14,fontWeight:600}}>{fb.ok?"✓ ":"정답: "}{fb.msg}</div>}
-        {!fb&&<button onClick={submit} style={{background:typed.trim()?C.enBg:"transparent",border:`1.5px solid ${C.en}`,borderRadius:10,color:C.en,padding:"11px",fontSize:14,fontFamily:F,cursor:"pointer",fontWeight:600,width:"100%",marginTop:12}}>확인 (Enter)</button>}
+        {!fb&&<button onClick={submit} style={{background:C.enBg,border:`1.5px solid ${C.en}`,borderRadius:10,color:C.en,padding:"11px",fontSize:14,fontFamily:F,cursor:"pointer",fontWeight:600,width:"100%",marginTop:12}}>확인 (Enter)</button>}
       </div>
     </div>
   );
