@@ -72,14 +72,25 @@ export default function App(){
 
   const submit=()=>{
     if(comp)return;const t=typed.trim();if(!t)return;
-    const ok=norm(t)===norm(target);
-    if(ok){okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`})}
-    else{setCombo(0);setErrors(e=>[...e,{en:cur.e,kr:cur.k,typed:t,step}]);setFb({ok:false,msg:target})}
-    setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
-      if(step===0){setStep(1)}else{setStep(0);
-        if(idx+1<lines.length)setIdx(idx+1);
-        else{const fs=score+(ok?1:0);const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
-    },900);
+    // 글자별 정확도 계산
+    const tChars=[...norm(t)];const gChars=[...norm(target)];
+    const maxLen=Math.max(tChars.length,gChars.length);
+    let matched=0;for(let i=0;i<maxLen;i++){if(tChars[i]===gChars[i])matched++}
+    const accuracy=maxLen>0?matched/gChars.length:0;
+    const ok=accuracy>=0.9;
+
+    if(ok){okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
+      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
+        if(step===0){setStep(1)}else{setStep(0);
+          if(idx+1<lines.length)setIdx(idx+1);
+          else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
+      },900);
+    } else {
+      setCombo(0);
+      const pctShow=Math.round(accuracy*100);
+      setFb({ok:false,msg:`${pctShow}% — 90% 이상 정확하게 다시 치세요`});
+      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0},1200);
+    }
   };
 
   const fps=search.trim()?P.filter(p=>String(p.p).includes(search.trim())||p.t.toLowerCase().includes(search.trim().toLowerCase())||p.l.toLowerCase().includes(search.trim().toLowerCase())):P;
@@ -168,9 +179,9 @@ export default function App(){
           <div style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30}}>
             {[...target].map((ch,i)=>{
               const tc=[...typed][i];const isT=tc!=null;const cL=ch.toLowerCase();const tL=tc?.toLowerCase();
-              return <span key={i} style={{color:isT?(tL===cL?(step===0?C.en:C.kr):C.no):C.ghost,fontWeight:isT?700:400,transition:"color 0.1s"}}>{ch}</span>;
+              const isCursor=!fb&&i===typed.length;
+              return <span key={i}>{isCursor&&<span style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite"}}/>}<span style={{color:isT?(tL===cL?(step===0?C.en:C.kr):C.no):C.ghost,fontWeight:isT?700:400}}>{ch}</span></span>;
             })}
-            {!fb&&typed.length<target.length&&<span style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",marginLeft:1}}>&nbsp;</span>}
           </div>
           <input ref={ref} value={typed} onChange={onChange}
             onCompositionStart={()=>setComp(true)} onCompositionEnd={e=>{setComp(false);setTyped(e.target.value);prevLen.current=e.target.value.length}}
