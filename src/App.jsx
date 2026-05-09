@@ -219,14 +219,19 @@ const C = {
 const F = "'Pretendard Variable','Noto Sans KR',system-ui,sans-serif";
 
 export default function App() {
-  const [phase, setPhase] = useState(0); // 0=목록, 1=진행, 2=결과
+  const [phase, setPhase] = useState(0);
   const [pi, setPi] = useState(0);
   const [idx, setIdx] = useState(0);
-  const [step, setStep] = useState(0); // 0=영어, 1=한글
+  const [step, setStep] = useState(0);
   const [typed, setTyped] = useState("");
   const [comp, setComp] = useState(false);
   const [fb, setFb] = useState(null);
-  const [coin, setCoin] = useState(0);
+  const [coin, setCoin] = useState(() => {
+    try { return parseInt(localStorage.getItem("stella_coin")) || 0; } catch { return 0; }
+  });
+  const [totalSentences, setTotalSentences] = useState(() => {
+    try { return parseInt(localStorage.getItem("stella_total")) || 0; } catch { return 0; }
+  });
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [score, setScore] = useState(0);
@@ -235,6 +240,14 @@ export default function App() {
   const [showCoinAnim, setShowCoinAnim] = useState(null);
   const ref = useRef(null);
   const searchRef = useRef(null);
+
+  // 코인 & 총 문장 수 저장
+  useEffect(() => {
+    try { localStorage.setItem("stella_coin", String(coin)); } catch {}
+  }, [coin]);
+  useEffect(() => {
+    try { localStorage.setItem("stella_total", String(totalSentences)); } catch {}
+  }, [totalSentences]);
 
   const pg = PAGES[pi];
   const cur = pg?.lines?.[idx] || { en: "", kr: "" };
@@ -267,6 +280,7 @@ export default function App() {
 
     if (ok) {
       setScore(s => s + 1);
+      setTotalSentences(t => t + 1);
       setCombo(c => { const nc = c + 1; if (nc > maxCombo) setMaxCombo(nc); return nc; });
       const bonus = combo >= 4 ? 50 : 0;
       addCoin(100 + bonus);
@@ -305,6 +319,18 @@ export default function App() {
     borderRadius: 12, padding: "14px 16px", fontSize: 17, fontFamily: F, color: C.txt, outline: "none",
   };
 
+  // 레벨 계산
+  const getLevel = () => {
+    if (totalSentences >= 500) return { name: "영어 마스터", emoji: "👑", next: null };
+    if (totalSentences >= 300) return { name: "영어 박사", emoji: "🎓", next: 500 };
+    if (totalSentences >= 150) return { name: "번개 타자", emoji: "⚡", next: 300 };
+    if (totalSentences >= 80) return { name: "타자 고수", emoji: "🔥", next: 150 };
+    if (totalSentences >= 30) return { name: "열심 학생", emoji: "📚", next: 80 };
+    if (totalSentences >= 10) return { name: "타자 견습생", emoji: "✏️", next: 30 };
+    return { name: "초보 타자", emoji: "🐣", next: 10 };
+  };
+  const level = getLevel();
+
   // ═══ 목록 ═══
   if (phase === 0) return (
     <div style={box}>
@@ -320,6 +346,35 @@ export default function App() {
             <span style={{ fontSize: 18, fontWeight: 800, color: C.gold }}>{coin}</span>
           </div>
         </div>
+
+        {/* 스텔라 상태창 */}
+        <div style={{
+          background: C.card, borderRadius: 14, padding: "16px 18px", marginBottom: 12,
+          border: `1px solid ${C.bdr}`,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 24 }}>{level.emoji}</span>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.txt }}>스텔라</div>
+                <div style={{ fontSize: 12, color: C.en, fontWeight: 600 }}>{level.name}</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>🪙 {coin.toLocaleString()}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16, fontSize: 12, color: C.dim }}>
+            <div>✅ 완료 <span style={{ color: C.ok, fontWeight: 700 }}>{totalSentences}</span>문장</div>
+            {level.next && <div>다음 레벨까지 <span style={{ color: C.en, fontWeight: 700 }}>{level.next - totalSentences}</span>문장</div>}
+          </div>
+          {level.next && (
+            <div style={{ marginTop: 8, height: 4, borderRadius: 2, background: "rgba(255,255,255,0.06)" }}>
+              <div style={{ height: "100%", borderRadius: 2, background: C.en, width: `${Math.min(100, (totalSentences / level.next) * 100)}%`, transition: "width 0.3s" }} />
+            </div>
+          )}
+        </div>
+
         <input
           ref={searchRef}
           value={search}
