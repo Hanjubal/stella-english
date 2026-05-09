@@ -70,6 +70,24 @@ export default function App(){
 
   const onChange=(e)=>{const v=e.target.value;if(v.length>prevLen.current)keySound();prevLen.current=v.length;setTyped(v)};
 
+  // DOM 직접 조작으로 즉각 반응
+  const guideRef=useRef(null);
+  useEffect(()=>{
+    if(!guideRef.current||phase!==1||fb)return;
+    const spans=guideRef.current.querySelectorAll("[data-gi]");
+    const tArr=[...typed];const enC=step===0?C.en:C.kr;
+    spans.forEach((sp,i)=>{
+      const ch=sp.getAttribute("data-ch")||"";
+      const tc=tArr[i];const isT=tc!=null;
+      const cL=ch.toLowerCase();const tL=tc?.toLowerCase();
+      sp.style.color=isT?(tL===cL?enC:C.no):C.ghost;
+      sp.style.fontWeight=isT?"700":"400";
+    });
+    // 커서 위치
+    const cursors=guideRef.current.querySelectorAll("[data-cur]");
+    cursors.forEach((c,i)=>{c.style.display=i===typed.length?"inline":"none"});
+  });
+
   const submit=()=>{
     if(comp)return;const t=typed.trim();if(!t)return;
     // 글자별 정확도 계산
@@ -174,14 +192,12 @@ export default function App(){
 
         <div style={{fontSize:12,color:step===0?C.en:C.kr,fontWeight:600,marginBottom:6,textAlign:"center"}}>{step===0?"🇺🇸 영어를 따라 치세요":"🇰🇷 한글 해석을 따라 치세요"}</div>
 
-        {/* 투명 글자 가이드 */}
+        {/* 투명 글자 가이드 — DOM 직접 조작 */}
         <div style={{background:C.cardL,borderRadius:12,padding:"16px 18px",border:`1.5px solid ${fb?(fb.ok?C.ok:C.no):"rgba(255,255,255,0.1)"}`,minHeight:56,position:"relative",cursor:"text"}} onClick={()=>ref.current?.focus()}>
-          <div style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30}}>
-            {[...target].map((ch,i)=>{
-              const tc=[...typed][i];const isT=tc!=null;const cL=ch.toLowerCase();const tL=tc?.toLowerCase();
-              const isCursor=!fb&&i===typed.length;
-              return <span key={i}>{isCursor&&<span style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite"}}/>}<span style={{color:isT?(tL===cL?(step===0?C.en:C.kr):C.no):C.ghost,fontWeight:isT?700:400}}>{ch}</span></span>;
-            })}
+          <div ref={guideRef} style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30}}>
+            {[...target].map((ch,i)=>
+              <span key={i}><span data-cur="1" style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",display:i===0&&!fb?"inline":"none"}}/><span data-gi="1" data-ch={ch} style={{color:C.ghost,fontWeight:400}}>{ch}</span></span>
+            )}
           </div>
           <input ref={ref} value={typed} onChange={onChange}
             onCompositionStart={()=>setComp(true)} onCompositionEnd={e=>{setComp(false);setTyped(e.target.value);prevLen.current=e.target.value.length}}
