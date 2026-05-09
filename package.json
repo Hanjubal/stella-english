@@ -1,0 +1,22 @@
+{
+  "name": "stella-english-tutor",
+  "version": "1.0.0",
+  "description": "스텔라 영어 따라치기 — 교과서 기반 타이핑 학습",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.4.6"
+  }
+}
