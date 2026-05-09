@@ -68,36 +68,56 @@ export default function App(){
   const reset=()=>{setIdx(0);setStep(0);setTyped("");setFb(null);setCombo(0);setMxCombo(0);setScore(0);setErrors([]);prevLen.current=0};
   const addCoin=(a)=>{setCoin(c=>c+a);setCoinAnim(a);setTimeout(()=>setCoinAnim(null),800)};
 
-  const onChange=(e)=>{const v=e.target.value;if(v.length>prevLen.current)keySound();prevLen.current=v.length;setTyped(v)};
+  const onChange=(e)=>{
+    // React state 업데이트는 하되 DOM 조작을 먼저 즉시 실행
+    const v=e.target.value;
+    if(v.length>prevLen.current)keySound();
+    prevLen.current=v.length;
+    // DOM 직접 조작 — 즉각 반응
+    if(guideRef.current&&phase===1&&!fb){
+      const spans=guideRef.current.querySelectorAll("[data-gi]");
+      const tArr=[...v];const enC=step===0?C.en:C.kr;
+      for(let i=0;i<spans.length;i++){
+        const sp=spans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
+        const tc=tArr[i];
+        if(tc!=null){
+          sp.style.color=tc.toLowerCase()===ch?enC:"#fb923c";
+          sp.style.fontWeight="700";
+        }else{
+          sp.style.color=C.ghost;
+          sp.style.fontWeight="400";
+        }
+      }
+      const cursors=guideRef.current.querySelectorAll("[data-cur]");
+      for(let i=0;i<cursors.length;i++){
+        cursors[i].style.display=i===v.length?"inline":"none";
+      }
+    }
+    setTyped(v);
+  };
 
-  // DOM 직접 조작으로 즉각 반응
   const guideRef=useRef(null);
-  useEffect(()=>{
-    if(!guideRef.current||phase!==1||fb)return;
-    const spans=guideRef.current.querySelectorAll("[data-gi]");
-    const tArr=[...typed];const enC=step===0?C.en:C.kr;
-    spans.forEach((sp,i)=>{
-      const ch=sp.getAttribute("data-ch")||"";
-      const tc=tArr[i];const isT=tc!=null;
-      const cL=ch.toLowerCase();const tL=tc?.toLowerCase();
-      sp.style.color=isT?(tL===cL?enC:C.no):C.ghost;
-      sp.style.fontWeight=isT?"700":"400";
-    });
-    // 커서 위치
-    const cursors=guideRef.current.querySelectorAll("[data-cur]");
-    cursors.forEach((c,i)=>{c.style.display=i===typed.length?"inline":"none"});
-  });
 
   const submit=()=>{
     if(comp)return;const t=typed.trim();if(!t)return;
-    // 글자별 정확도 계산
-    const tChars=[...norm(t)];const gChars=[...norm(target)];
-    const maxLen=Math.max(tChars.length,gChars.length);
-    let matched=0;for(let i=0;i<maxLen;i++){if(tChars[i]===gChars[i])matched++}
-    const accuracy=maxLen>0?matched/gChars.length:0;
-    const ok=accuracy>=0.9;
-
-    if(ok){okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
+    // 1차: norm 완전 일치 → 즉시 통과
+    const normT=norm(t);const normG=norm(target);
+    if(normT===normG){
+      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
+      setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
+        if(step===0){setStep(1)}else{setStep(0);
+          if(idx+1<lines.length)setIdx(idx+1);
+          else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
+      },900);
+      return;
+    }
+    // 2차: 90% 글자 비교
+    const tChars=[...normT];const gChars=[...normG];
+    let matched=0;const len=Math.min(tChars.length,gChars.length);
+    for(let i=0;i<len;i++){if(tChars[i]===gChars[i])matched++}
+    const accuracy=gChars.length>0?matched/gChars.length:0;
+    if(accuracy>=0.9){
+      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:`${Math.round(accuracy*100)}% 통과! +${100+b}🪙`});
       setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0;
         if(step===0){setStep(1)}else{setStep(0);
           if(idx+1<lines.length)setIdx(idx+1);
@@ -105,8 +125,7 @@ export default function App(){
       },900);
     } else {
       setCombo(0);
-      const pctShow=Math.round(accuracy*100);
-      setFb({ok:false,msg:`${pctShow}% — 90% 이상 정확하게 다시 치세요`});
+      setFb({ok:false,msg:`${Math.round(accuracy*100)}% — 다시 치세요`});
       setTimeout(()=>{setFb(null);setTyped("");prevLen.current=0},1200);
     }
   };
