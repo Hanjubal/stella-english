@@ -10,6 +10,13 @@ const PORT = process.env.PORT || 8080;
 const DATA_FILE = join(__dirname, '..', 'data', 'reports.json');
 
 app.use(express.json());
+
+// KST(한국 표준시) 기준 날짜 키 — offsetDays=-1이면 어제, 0이면 오늘
+const kstDate = (offsetDays = 0) => {
+  const ms = Date.now() + 9 * 3600 * 1000 + offsetDays * 86400 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+};
+
 const dataDir = join(__dirname, '..', 'data');
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 const load = () => { try { return JSON.parse(readFileSync(DATA_FILE, 'utf8')); } catch { return []; } };
@@ -27,21 +34,19 @@ app.post('/api/report', (req, res) => {
   res.json({ ok: true });
 });
 
-// 마하르발용 현황 조회
+// 마하르발용 현황 조회 — 모든 날짜는 KST 기준
 app.get('/api/status', (req, res) => {
   const all = load();
-  const today = new Date().toISOString().split('T')[0];
+  const today = kstDate(0);
   const td = all.filter(r => r.date === today);
   const days = [...new Set(all.map(r => r.date))];
   let streak = 0;
   for (let i = 0; i < 365; i++) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    if (all.some(r => r.date === d.toISOString().split('T')[0])) streak++; else break;
+    if (all.some(r => r.date === kstDate(-i))) streak++; else break;
   }
   const week = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = kstDate(-i);
     week.push({ date: ds, count: all.filter(r => r.date === ds).length });
   }
   res.json({

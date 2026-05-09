@@ -8,6 +8,12 @@ const speak = (text, lang = "en-US") => {
 };
 const norm = s => s.replace(/[.,!?;:'"''""\-—()[\]{}…·]+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
+// KST(한국 표준시) 기준 오늘 날짜 키 — 서버와 통일
+const kstToday = () => {
+  const ms = Date.now() + 9 * 3600 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+};
+
 let actx = null;
 const initAudio=()=>{if(!actx)try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch{}};
 const keySound = () => { try { initAudio();if(!actx)return;const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=800+Math.random()*400;o.type="sine"; g.gain.value=0.04;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.06); o.start();o.stop(actx.currentTime+0.06); } catch{} };
@@ -39,7 +45,7 @@ const F="'Pretendard Variable','Noto Sans KR',system-ui,sans-serif";
 
 const reportDone=async(d)=>{
   try{
-    const t=new Date().toISOString().split("T")[0];
+    const t=kstToday();
     // localStorage 저장
     const h=JSON.parse(localStorage.getItem("stella_history")||"[]");
     h.push({date:t,...d});localStorage.setItem("stella_history",JSON.stringify(h));
@@ -67,7 +73,7 @@ export default function App(){
   const[errors,setErrors]=useState([]);
   const[search,setSearch]=useState("");
   const[coinAnim,setCoinAnim]=useState(null);
-  const[todayDone,setTodayDone]=useState(()=>{try{const t=new Date().toISOString().split("T")[0];return JSON.parse(localStorage.getItem("stella_today_"+t)||"[]")}catch{return[]}});
+  const[todayDone,setTodayDone]=useState(()=>{try{const t=kstToday();return JSON.parse(localStorage.getItem("stella_today_"+t)||"[]")}catch{return[]}});
   const ref=useRef(null);
   const prevLen=useRef(0);
   const guideRef=useRef(null);
