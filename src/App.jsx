@@ -42,8 +42,6 @@ export default function App(){
   const[pi,setPi]=useState(0);
   const[idx,setIdx]=useState(0);
   const[step,setStep]=useState(0);
-  const[typed,setTyped]=useState("");
-  const[comp,setComp]=useState(false);
   const[fb,setFb]=useState(null);
   const[coin,setCoin]=useState(()=>{try{return parseInt(localStorage.getItem("stella_coin"))||0}catch{return 0}});
   const[tot,setTot]=useState(()=>{try{return parseInt(localStorage.getItem("stella_total"))||0}catch{return 0}});
@@ -57,7 +55,6 @@ export default function App(){
   const ref=useRef(null);
   const prevLen=useRef(0);
   const guideRef=useRef(null);
-  const typedRef=useRef("");
   const compRef=useRef(false);
 
   // 첫 터치로 AudioContext 초기화
@@ -72,17 +69,22 @@ export default function App(){
   useEffect(()=>{ref.current?.focus()},[phase,idx,step,fb]);
   useEffect(()=>{if(phase===1&&step===0&&cur.e)setTimeout(()=>speak(cur.e,"en-US"),300)},[phase,idx]);
 
-  // 네이티브 input 이벤트 바인딩 — React 리렌더 없이 DOM 직접 조작
+  // 네이티브 input 이벤트 — span ref 캐시로 DOM 검색 비용 0
+  const spansRef=useRef([]);
+  const cursRef=useRef([]);
+
   useEffect(()=>{
     const inp=ref.current;if(!inp||phase!==1)return;
-    const handler=(e)=>{
+    // span/cursor ref 캐시
+    const g=guideRef.current;
+    if(g){spansRef.current=[...g.querySelectorAll("[data-gi]")];cursRef.current=[...g.querySelectorAll("[data-cur]")];}
+
+    const handler=()=>{
       const v=inp.value;
       if(v.length>prevLen.current)keySound();
       prevLen.current=v.length;
-      typedRef.current=v;
-      // DOM 직접 색칠 — 즉각 반응
-      const g=guideRef.current;if(!g)return;
-      const spans=g.querySelectorAll("[data-gi]");
+      // 캐시된 span 직접 조작 — 검색 비용 0
+      const spans=spansRef.current;const curs=cursRef.current;
       const tArr=[...v];const enC=step===0?"#60a5fa":"#6ee7b7";
       for(let i=0;i<spans.length;i++){
         const sp=spans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
@@ -90,24 +92,24 @@ export default function App(){
         if(tc!=null){sp.style.color=tc.toLowerCase()===ch?enC:"#fb923c";sp.style.fontWeight="700"}
         else{sp.style.color="rgba(255,255,255,0.15)";sp.style.fontWeight="400"}
       }
-      const curs=g.querySelectorAll("[data-cur]");
       for(let i=0;i<curs.length;i++)curs[i].style.display=i===v.length?"inline":"none";
     };
     inp.addEventListener("input",handler);
     return()=>inp.removeEventListener("input",handler);
   },[phase,step,idx,target]);
 
-  const reset=()=>{setIdx(0);setStep(0);setTyped("");setFb(null);setCombo(0);setMxCombo(0);setScore(0);setErrors([]);prevLen.current=0;typedRef.current="";if(ref.current)ref.current.value=""};
+  const reset=()=>{setIdx(0);setStep(0);setFb(null);setCombo(0);setMxCombo(0);setScore(0);setErrors([]);prevLen.current=0;if(ref.current)ref.current.value=""};
   const addCoin=(a)=>{setCoin(c=>c+a);setCoinAnim(a);setTimeout(()=>setCoinAnim(null),800)};
 
   const submit=()=>{
     if(compRef.current)return;
-    const t=(typedRef.current||"").trim();if(!t)return;
+    // 항상 input DOM에서 직접 읽기 — 한글 조합 완성 보장
+    const t=(ref.current?.value||"").trim();if(!t)return;
     const normT=norm(t);const normG=norm(target);
     // 1차: 완전 일치
     if(normT===normG){
-      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
-      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value="";
+      okSound();setScore(s=>s+1);setTot(x=>x+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:combo>=4?`${combo+1} 콤보! +${100+b}🪙`:`+100🪙`});
+      setTimeout(()=>{setFb(null);prevLen.current=0;if(ref.current)ref.current.value="";
         if(step===0){setStep(1)}else{setStep(0);
           if(idx+1<lines.length)setIdx(idx+1);
           else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
@@ -119,15 +121,15 @@ export default function App(){
     for(let i=0;i<len;i++)if(tC[i]===gC[i])m++;
     const acc=gC.length>0?m/gC.length:0;
     if(acc>=0.9){
-      okSound();setScore(s=>s+1);setTot(t=>t+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:`${Math.round(acc*100)}% 통과! +${100+b}🪙`});
-      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value="";
+      okSound();setScore(s=>s+1);setTot(x=>x+1);setCombo(c=>{const n=c+1;if(n>mxCombo)setMxCombo(n);return n});const b=combo>=4?50:0;addCoin(100+b);setFb({ok:true,msg:`${Math.round(acc*100)}% 통과! +${100+b}🪙`});
+      setTimeout(()=>{setFb(null);prevLen.current=0;if(ref.current)ref.current.value="";
         if(step===0){setStep(1)}else{setStep(0);
           if(idx+1<lines.length)setIdx(idx+1);
           else{const fs=score+1;const tl=lines.length*2;if(fs===tl)addCoin(50);reportDone({page:pg.p,lesson:pg.l,title:pg.t,score:fs,total:tl,maxCombo:mxCombo});setTodayDone(d=>[...d,pg.p]);setPhase(2)}}
       },900);
     } else {
       setCombo(0);setFb({ok:false,msg:`${Math.round(acc*100)}% — 다시 치세요`});
-      setTimeout(()=>{setFb(null);setTyped("");typedRef.current="";prevLen.current=0;if(ref.current)ref.current.value=""},1200);
+      setTimeout(()=>{setFb(null);prevLen.current=0;if(ref.current)ref.current.value=""},1200);
     }
   };
 
