@@ -76,18 +76,21 @@ export default function App(){
   // 네이티브 input 이벤트 — span ref 캐시로 DOM 검색 비용 0
   const spansRef=useRef([]);
   const cursRef=useRef([]);
+  const typedSpansRef=useRef([]);
 
   useEffect(()=>{
     const inp=ref.current;if(!inp||phase!==1)return;
-    // span/cursor ref 캐시
     const g=guideRef.current;
-    if(g){spansRef.current=[...g.querySelectorAll("[data-gi]")];cursRef.current=[...g.querySelectorAll("[data-cur]")];}
+    if(g){
+      spansRef.current=[...g.querySelectorAll("[data-gi]")];
+      cursRef.current=[...g.querySelectorAll("[data-cur]")];
+      typedSpansRef.current=[...g.querySelectorAll("[data-ti]")];
+    }
 
     const handler=()=>{
       const v=inp.value;
       const newLen=v.length;
       if(newLen>prevLen.current){
-        // 마지막 입력 글자가 맞는지 틀리는지 판별
         const lastIdx=newLen-1;
         const spans=spansRef.current;
         if(lastIdx<spans.length){
@@ -97,14 +100,22 @@ export default function App(){
         }else keySound();
       }
       prevLen.current=newLen;
-      // 캐시된 span 직접 조작 — 검색 비용 0
-      const spans=spansRef.current;const curs=cursRef.current;
+      const spans=spansRef.current;const curs=cursRef.current;const tspans=typedSpansRef.current;
       const tArr=[...v];const enC=step===0?"#60a5fa":"#6ee7b7";
       for(let i=0;i<spans.length;i++){
-        const sp=spans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
+        const sp=spans[i];const ts=tspans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
         const tc=tArr[i];
-        if(tc!=null){sp.style.color=tc.toLowerCase()===ch?enC:"#fb923c";sp.style.fontWeight="700"}
-        else{sp.style.color="rgba(255,255,255,0.15)";sp.style.fontWeight="400"}
+        if(tc!=null){
+          const match=tc.toLowerCase()===ch;
+          // 맞으면: 가이드 글자를 정답색으로
+          sp.style.color=match?enC:"rgba(255,255,255,0.08)";
+          sp.style.fontWeight="700";
+          // 틀리면: 입력 글자를 주황색으로 보여줌
+          if(ts){ts.textContent=match?"":tc;ts.style.color=match?"transparent":"#fb923c"}
+        } else {
+          sp.style.color="rgba(255,255,255,0.15)";sp.style.fontWeight="400";
+          if(ts){ts.textContent="";ts.style.color="transparent"}
+        }
       }
       for(let i=0;i<curs.length;i++)curs[i].style.display=i===v.length?"inline":"none";
     };
@@ -238,9 +249,15 @@ export default function App(){
 
         {/* 투명 글자 가이드 — DOM 직접 조작 */}
         <div style={{background:C.cardL,borderRadius:12,padding:"16px 18px",border:`1.5px solid ${fb?(fb.ok?C.ok:C.no):"rgba(255,255,255,0.1)"}`,minHeight:56,position:"relative",cursor:"text"}} onClick={()=>ref.current?.focus()}>
-          <div ref={guideRef} style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30}}>
+          <div ref={guideRef} style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30,position:"relative"}}>
             {[...target].map((ch,i)=>
-              <span key={i}><span data-cur="1" style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",display:i===0&&!fb?"inline":"none"}}/><span data-gi="1" data-ch={ch} style={{color:C.ghost,fontWeight:400}}>{ch}</span></span>
+              <span key={i} style={{position:"relative",display:"inline"}}>
+                <span data-cur="1" style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",display:i===0&&!fb?"inline":"none"}}/>
+                {/* 가이드 글자 (항상 보임) */}
+                <span data-gi="1" data-ch={ch} style={{color:C.ghost,fontWeight:400}}>{ch}</span>
+                {/* 입력 글자 (위에 덮어쓰기) */}
+                <span data-ti="1" style={{position:"absolute",left:0,top:0,color:"transparent",fontWeight:700}}></span>
+              </span>
             )}
           </div>
           <input ref={ref} defaultValue=""
