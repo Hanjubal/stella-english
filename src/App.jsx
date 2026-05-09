@@ -37,7 +37,21 @@ const P=[
 const C={bg:"#0a0e1a",card:"#111827",cardL:"#1a2235",ok:"#4ade80",no:"#f87171",txt:"#e2e8f0",dim:"#94a3b8",mute:"#64748b",bdr:"rgba(255,255,255,0.06)",en:"#60a5fa",enBg:"rgba(96,165,250,0.08)",gold:"#fbbf24",goldBg:"rgba(251,191,36,0.1)",combo:"#c084fc",kr:"#6ee7b7",ghost:"rgba(255,255,255,0.15)"};
 const F="'Pretendard Variable','Noto Sans KR',system-ui,sans-serif";
 
-const reportDone=(d)=>{try{const t=new Date().toISOString().split("T")[0];const h=JSON.parse(localStorage.getItem("stella_history")||"[]");h.push({date:t,...d});localStorage.setItem("stella_history",JSON.stringify(h));const tp=JSON.parse(localStorage.getItem("stella_today_"+t)||"[]");tp.push(d.page);localStorage.setItem("stella_today_"+t,JSON.stringify(tp));}catch{}};
+const reportDone=async(d)=>{
+  try{
+    const t=new Date().toISOString().split("T")[0];
+    // localStorage 저장
+    const h=JSON.parse(localStorage.getItem("stella_history")||"[]");
+    h.push({date:t,...d});localStorage.setItem("stella_history",JSON.stringify(h));
+    const tp=JSON.parse(localStorage.getItem("stella_today_"+t)||"[]");
+    tp.push(d.page);localStorage.setItem("stella_today_"+t,JSON.stringify(tp));
+    // 마지막 완료 페이지 인덱스 저장
+    const pi=P.findIndex(p=>p.p===d.page);
+    if(pi>=0)localStorage.setItem("stella_lastIdx",String(pi));
+    // 서버 API 보고
+    fetch("/api/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:t,...d})}).catch(()=>{});
+  }catch{}
+};
 
 export default function App(){
   const[phase,setPhase]=useState(0);
@@ -159,7 +173,7 @@ export default function App(){
   };
 
   const fps=search.trim()?P.filter(p=>String(p.p).includes(search.trim())||p.t.toLowerCase().includes(search.trim().toLowerCase())||p.l.toLowerCase().includes(search.trim().toLowerCase())):P;
-  const box={maxWidth:520,margin:"0 auto",minHeight:"100dvh",display:"flex",flexDirection:"column",fontFamily:F,background:C.bg,color:C.txt};
+  const box={maxWidth:720,margin:"0 auto",minHeight:"100dvh",display:"flex",flexDirection:"column",fontFamily:F,background:C.bg,color:C.txt};
 
   const lv=(()=>{if(tot>=500)return{n:"영어 마스터",e:"👑",nx:null};if(tot>=300)return{n:"영어 박사",e:"🎓",nx:500};if(tot>=150)return{n:"번개 타자",e:"⚡",nx:300};if(tot>=80)return{n:"타자 고수",e:"🔥",nx:150};if(tot>=30)return{n:"열심 학생",e:"📚",nx:80};if(tot>=10)return{n:"타자 견습생",e:"✏️",nx:30};return{n:"초보 타자",e:"🐣",nx:10}})();
 
@@ -189,6 +203,38 @@ export default function App(){
           </div>
           {lv.nx&&<div style={{marginTop:6,height:4,borderRadius:2,background:"rgba(255,255,255,0.06)"}}><div style={{height:"100%",borderRadius:2,background:C.en,width:`${Math.min(100,(tot/lv.nx)*100)}%`}}/></div>}
         </div>
+
+        {/* 오늘의 수업 카드 */}
+        {(()=>{
+          const lastIdx=parseInt(localStorage.getItem("stella_lastIdx")||"-1");
+          const nextIdx=todayDone.length>0?(lastIdx+1<P.length?lastIdx+1:0):(lastIdx>=0?lastIdx+1:0);
+          const nextPg=P[Math.min(nextIdx,P.length-1)];
+          const isDone=todayDone.length>=1;
+          return(
+            <div style={{background:isDone?"rgba(74,222,128,0.08)":"rgba(96,165,250,0.1)",borderRadius:14,padding:"16px 18px",marginBottom:12,border:`1px solid ${isDone?"rgba(74,222,128,0.2)":"rgba(96,165,250,0.2)"}`,cursor:isDone?"default":"pointer"}}
+              onClick={()=>{if(!isDone){setPi(Math.min(nextIdx,P.length-1));reset();setPhase(1)}}}>
+              {isDone?(
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:20}}>🎉</div>
+                  <div style={{fontSize:16,fontWeight:700,color:C.ok}}>오늘의 과제 완료!</div>
+                  <div style={{fontSize:13,color:C.dim,marginTop:4}}>잘했어 스텔라! 내일 또 만나자</div>
+                </div>
+              ):(
+                <div>
+                  <div style={{fontSize:12,color:C.en,fontWeight:600,marginBottom:6}}>📚 오늘의 수업</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:17,fontWeight:700,color:C.txt}}>p.{nextPg.p} · {nextPg.t}</div>
+                      <div style={{fontSize:13,color:C.dim,marginTop:2}}>{nextPg.l} · {nextPg.s.length}문장</div>
+                    </div>
+                    <div style={{background:C.en,borderRadius:10,padding:"8px 18px",fontSize:14,fontWeight:700,color:"#0a0e1a"}}>시작 →</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 페이지 번호 검색 (예: 50)" style={{width:"100%",boxSizing:"border-box",background:C.cardL,border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 14px",fontSize:14,fontFamily:F,color:C.txt,outline:"none"}}/>
       </div>
       <div style={{flex:1,padding:"12px 20px",overflowY:"auto"}}>
@@ -232,24 +278,24 @@ export default function App(){
 
         {/* 단어장 */}
         {pg.w&&pg.w.length>0&&<div style={{background:"rgba(96,165,250,0.06)",borderRadius:12,padding:"10px 16px",marginBottom:10,border:"1px solid rgba(96,165,250,0.12)"}}>
-          <div style={{fontSize:11,color:C.en,fontWeight:600,marginBottom:6}}>📖 단어장</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:"4px 12px"}}>
-            {pg.w.map((wd,i)=><div key={i} style={{fontSize:12,color:C.dim}}><span style={{color:C.en,fontWeight:600}}>{wd.e}</span> {wd.k}</div>)}
+          <div style={{fontSize:13,color:C.en,fontWeight:600,marginBottom:8}}>📖 단어장</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:"6px 16px"}}>
+            {pg.w.map((wd,i)=><div key={i} style={{fontSize:14,color:C.dim}}><span style={{color:C.en,fontWeight:600}}>{wd.e}</span> {wd.k}</div>)}
           </div>
         </div>}
 
         {/* 문장 카드 */}
         <div style={{background:C.card,borderRadius:16,padding:"20px 24px",marginBottom:12,border:`1px solid ${C.bdr}`}}>
-          <div style={{fontSize:17,fontWeight:700,lineHeight:1.7,color:C.en}}>{cur.e}</div>
-          <div style={{fontSize:14,color:C.kr,lineHeight:1.5,marginTop:6}}>{cur.k}</div>
-          <button onClick={()=>speak(cur.e,"en-US")} style={{background:C.enBg,border:`1px solid ${C.en}33`,borderRadius:8,padding:"4px 12px",cursor:"pointer",marginTop:10,fontSize:11,color:C.en,fontFamily:F}}>🔊 한번 더 듣기</button>
+          <div style={{fontSize:22,fontWeight:700,lineHeight:1.7,color:C.en}}>{cur.e}</div>
+          <div style={{fontSize:18,color:C.kr,lineHeight:1.5,marginTop:6}}>{cur.k}</div>
+          <button onClick={()=>speak(cur.e,"en-US")} style={{background:C.enBg,border:`1px solid ${C.en}33`,borderRadius:8,padding:"6px 16px",cursor:"pointer",marginTop:10,fontSize:13,color:C.en,fontFamily:F}}>🔊 한번 더 듣기</button>
         </div>
 
-        <div style={{fontSize:12,color:step===0?C.en:C.kr,fontWeight:600,marginBottom:6,textAlign:"center"}}>{step===0?"🇺🇸 영어를 따라 치세요":"🇰🇷 한글 해석을 따라 치세요"}</div>
+        <div style={{fontSize:14,color:step===0?C.en:C.kr,fontWeight:600,marginBottom:8,textAlign:"center"}}>{step===0?"🇺🇸 영어를 따라 치세요":"🇰🇷 한글 해석을 따라 치세요"}</div>
 
         {/* 투명 글자 가이드 — DOM 직접 조작 */}
         <div style={{background:C.cardL,borderRadius:12,padding:"16px 18px",border:`1.5px solid ${fb?(fb.ok?C.ok:C.no):"rgba(255,255,255,0.1)"}`,minHeight:56,position:"relative",cursor:"text"}} onClick={()=>ref.current?.focus()}>
-          <div ref={guideRef} style={{fontSize:18,lineHeight:1.7,wordBreak:"break-all",minHeight:30,position:"relative"}}>
+          <div ref={guideRef} style={{fontSize:24,lineHeight:1.8,wordBreak:"break-all",minHeight:36,position:"relative"}}>
             {[...target].map((ch,i)=>
               <span key={i} style={{position:"relative",display:"inline"}}>
                 <span data-cur="1" style={{borderLeft:`2px solid ${step===0?C.en:C.kr}`,animation:"blink 1s infinite",display:i===0&&!fb?"inline":"none"}}/>
@@ -263,11 +309,11 @@ export default function App(){
           <input ref={ref} defaultValue=""
             onCompositionStart={()=>{compRef.current=true}} onCompositionEnd={()=>{compRef.current=false}}
             onKeyDown={e=>{if(e.key==="Enter"&&!compRef.current)submit()}}
-            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,fontSize:18,fontFamily:F}} autoComplete="off" spellCheck={false} autoCapitalize="off"/>
+            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",opacity:0,fontSize:24,fontFamily:F}} autoComplete="off" spellCheck={false} autoCapitalize="off"/>
         </div>
 
-        {fb&&<div style={{marginTop:10,padding:"10px 14px",borderRadius:10,textAlign:"center",background:fb.ok?"rgba(74,222,128,0.1)":"rgba(248,113,113,0.08)",color:fb.ok?C.ok:C.no,fontSize:14,fontWeight:600}}>{fb.ok?"✓ ":"정답: "}{fb.msg}</div>}
-        {!fb&&<button onClick={submit} style={{background:C.enBg,border:`1.5px solid ${C.en}`,borderRadius:10,color:C.en,padding:"11px",fontSize:14,fontFamily:F,cursor:"pointer",fontWeight:600,width:"100%",marginTop:12}}>확인 (Enter)</button>}
+        {fb&&<div style={{marginTop:12,padding:"12px 16px",borderRadius:10,textAlign:"center",background:fb.ok?"rgba(74,222,128,0.1)":"rgba(248,113,113,0.08)",color:fb.ok?C.ok:C.no,fontSize:16,fontWeight:600}}>{fb.ok?"✓ ":"정답: "}{fb.msg}</div>}
+        {!fb&&<button onClick={submit} style={{background:C.enBg,border:`1.5px solid ${C.en}`,borderRadius:10,color:C.en,padding:"13px",fontSize:16,fontFamily:F,cursor:"pointer",fontWeight:600,width:"100%",marginTop:14}}>확인 (Enter)</button>}
       </div>
     </div>
   );
