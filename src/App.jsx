@@ -147,9 +147,9 @@ export default function App(){
         const tc=tArr[i];
         if(tc!=null){
           if(isKr&&i===lastCharIdx){
-            // 한글 조합 중인 마지막 글자 → 연한 진행중 색 (완성 아님)
-            sp.style.color="rgba(255,255,255,0.35)";sp.style.fontWeight="700";
-            if(ts){ts.textContent=tc;ts.style.color=enC+"90"}
+            // 한글 조합 중 — 선명한 흰색으로 표시
+            sp.style.color="rgba(255,255,255,0.12)";sp.style.fontWeight="700";
+            if(ts){ts.textContent=tc;ts.style.color="#e2e8f0"}
           }else{
             const match=tc.toLowerCase()===ch.toLowerCase();
             sp.style.color=match?enC:"rgba(255,255,255,0.08)";
