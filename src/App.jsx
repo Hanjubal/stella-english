@@ -8,12 +8,6 @@ const speak = (text, lang = "en-US") => {
 };
 const norm = s => s.replace(/[.,!?;:'"''""\-—()[\]{}…·]+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
-// KST(한국 표준시) 기준 오늘 날짜 키 — 서버와 통일
-const kstToday = () => {
-  const ms = Date.now() + 9 * 3600 * 1000;
-  return new Date(ms).toISOString().slice(0, 10);
-};
-
 let actx = null;
 const initAudio=()=>{if(!actx)try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch{}};
 const keySound = () => { try { initAudio();if(!actx)return;const o=actx.createOscillator(),g=actx.createGain(); o.connect(g);g.connect(actx.destination); o.frequency.value=800+Math.random()*400;o.type="sine"; g.gain.value=0.04;g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+0.06); o.start();o.stop(actx.currentTime+0.06); } catch{} };
@@ -45,7 +39,7 @@ const F="'Pretendard Variable','Noto Sans KR',system-ui,sans-serif";
 
 const reportDone=async(d)=>{
   try{
-    const t=kstToday();
+    const t=new Date().toISOString().split("T")[0];
     // localStorage 저장
     const h=JSON.parse(localStorage.getItem("stella_history")||"[]");
     h.push({date:t,...d});localStorage.setItem("stella_history",JSON.stringify(h));
@@ -73,7 +67,8 @@ export default function App(){
   const[errors,setErrors]=useState([]);
   const[search,setSearch]=useState("");
   const[coinAnim,setCoinAnim]=useState(null);
-  const[todayDone,setTodayDone]=useState(()=>{try{const t=kstToday();return JSON.parse(localStorage.getItem("stella_today_"+t)||"[]")}catch{return[]}});
+  const[todayDone,setTodayDone]=useState(()=>{try{const t=new Date().toISOString().split("T")[0];return JSON.parse(localStorage.getItem("stella_today_"+t)||"[]")}catch{return[]}});
+  const[giftModal,setGiftModal]=useState(null); // null | "confirm" | "success" | "fail"
   const ref=useRef(null);
   const prevLen=useRef(0);
   const guideRef=useRef(null);
@@ -89,9 +84,16 @@ export default function App(){
   const target=step===0?cur.e:cur.k;
 
   useEffect(()=>{ref.current?.focus()},[phase,idx,step,fb]);
-  useEffect(()=>{if(phase===1&&step===0&&cur.e)setTimeout(()=>speak(cur.e,"en-US"),300)},[phase,idx]);
-  // 한글 치기 시작할 때도 영어 한번 읽어주기
-  useEffect(()=>{if(phase===1&&step===1&&cur.e)setTimeout(()=>speak(cur.e,"en-US"),300)},[step]);
+  // 4초마다 문장 읽어주기 — 영어step은 영어, 한글step은 한글
+  useEffect(()=>{
+    if(phase!==1)return;
+    const txt=step===0?cur.e:cur.k;
+    const lang=step===0?"en-US":"ko-KR";
+    if(!txt)return;
+    speak(txt,lang);
+    const iv=setInterval(()=>speak(txt,lang),4000);
+    return()=>clearInterval(iv);
+  },[phase,idx,step]);
 
   // 네이티브 input 이벤트 — span ref 캐시로 DOM 검색 비용 0
   const spansRef=useRef([]);
@@ -110,28 +112,50 @@ export default function App(){
     const handler=()=>{
       const v=inp.value;
       const newLen=v.length;
+      const isKr=step===1;
+
+      // 타건음: 한글일 때는 완성된 글자만 비교, 영어는 즉시 비교
       if(newLen>prevLen.current){
-        const lastIdx=newLen-1;
-        const spans=spansRef.current;
-        if(lastIdx<spans.length){
-          const ch=(spans[lastIdx].getAttribute("data-ch")||"").toLowerCase();
-          const tc=[...v][lastIdx]?.toLowerCase();
-          if(tc===ch)keySound();else errSound();
-        }else keySound();
+        if(!isKr){
+          // 영어: 즉시 비교
+          const lastIdx=newLen-1;
+          const spans=spansRef.current;
+          if(lastIdx<spans.length){
+            const ch=(spans[lastIdx].getAttribute("data-ch")||"").toLowerCase();
+            const tc=[...v][lastIdx]?.toLowerCase();
+            if(tc===ch)keySound();else errSound();
+          }else keySound();
+        }else{
+          // 한글: 새 글자가 추가됐으면(이전 글자 완성) 이전 글자 비교
+          const tArr=[...v];
+          if(tArr.length>=2){
+            const prevIdx=tArr.length-2;
+            const spans=spansRef.current;
+            if(prevIdx<spans.length){
+              const ch=spans[prevIdx].getAttribute("data-ch")||"";
+              if(tArr[prevIdx]===ch)keySound();else errSound();
+            }else keySound();
+          }else keySound();
+        }
       }
       prevLen.current=newLen;
       const spans=spansRef.current;const curs=cursRef.current;const tspans=typedSpansRef.current;
       const tArr=[...v];const enC=step===0?"#60a5fa":"#6ee7b7";
+      const lastCharIdx=isKr?tArr.length-1:-1; // 한글: 마지막 글자는 조합중 → 진행중 색
       for(let i=0;i<spans.length;i++){
-        const sp=spans[i];const ts=tspans[i];const ch=(sp.getAttribute("data-ch")||"").toLowerCase();
+        const sp=spans[i];const ts=tspans[i];const ch=sp.getAttribute("data-ch")||"";
         const tc=tArr[i];
         if(tc!=null){
-          const match=tc.toLowerCase()===ch;
-          // 맞으면: 가이드 글자를 정답색으로
-          sp.style.color=match?enC:"rgba(255,255,255,0.08)";
-          sp.style.fontWeight="700";
-          // 틀리면: 입력 글자를 주황색으로 보여줌
-          if(ts){ts.textContent=match?"":tc;ts.style.color=match?"transparent":"#fb923c"}
+          if(isKr&&i===lastCharIdx){
+            // 한글 조합 중인 마지막 글자 → 연한 진행중 색 (완성 아님)
+            sp.style.color="rgba(255,255,255,0.35)";sp.style.fontWeight="700";
+            if(ts){ts.textContent=tc;ts.style.color=enC+"90"}
+          }else{
+            const match=tc.toLowerCase()===ch.toLowerCase();
+            sp.style.color=match?enC:"rgba(255,255,255,0.08)";
+            sp.style.fontWeight="700";
+            if(ts){ts.textContent=match?"":tc;ts.style.color=match?"transparent":"#fb923c"}
+          }
         } else {
           sp.style.color="rgba(255,255,255,0.15)";sp.style.fontWeight="400";
           if(ts){ts.textContent="";ts.style.color="transparent"}
@@ -209,6 +233,65 @@ export default function App(){
           </div>
           {lv.nx&&<div style={{marginTop:6,height:4,borderRadius:2,background:"rgba(255,255,255,0.06)"}}><div style={{height:"100%",borderRadius:2,background:C.en,width:`${Math.min(100,(tot/lv.nx)*100)}%`}}/></div>}
         </div>
+
+        {/* 🎁 선물 교환 카드 */}
+        <div style={{background:C.card,borderRadius:14,padding:"14px 18px",marginBottom:12,border:`1px solid ${C.bdr}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.gold}}>🎁 선물 교환</div>
+              {coin>=20000?(
+                <div style={{fontSize:13,color:C.ok,fontWeight:600,marginTop:4}}>20,000점 달성! 선물 교환 가능!</div>
+              ):(
+                <div style={{fontSize:13,color:C.dim,marginTop:4}}>
+                  <span style={{color:C.gold,fontWeight:700}}>{(20000-coin).toLocaleString()}</span>점 더 모으면 선물! 힘내 💪
+                </div>
+              )}
+              <div style={{marginTop:6,height:6,borderRadius:3,background:"rgba(255,255,255,0.06)"}}>
+                <div style={{height:"100%",borderRadius:3,background:C.gold,width:`${Math.min(100,(coin/20000)*100)}%`,transition:"width 0.3s"}}/>
+              </div>
+              <div style={{fontSize:11,color:C.mute,marginTop:4}}>{coin.toLocaleString()} / 20,000</div>
+            </div>
+            <button onClick={()=>{
+              if(coin>=20000)setGiftModal("confirm");
+              else setGiftModal("fail");
+            }} style={{marginLeft:14,background:coin>=20000?C.gold:"rgba(255,255,255,0.06)",border:"none",borderRadius:10,padding:"10px 16px",fontSize:13,fontWeight:700,color:coin>=20000?"#0a0e1a":C.mute,cursor:"pointer",whiteSpace:"nowrap"}}>
+              🎁 교환
+            </button>
+          </div>
+        </div>
+
+        {/* 선물 교환 모달 */}
+        {giftModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}} onClick={()=>setGiftModal(null)}>
+          <div style={{background:C.card,borderRadius:20,padding:"32px 28px",maxWidth:360,width:"90%",textAlign:"center",border:`1px solid ${C.bdr}`}} onClick={e=>e.stopPropagation()}>
+            {giftModal==="confirm"&&<>
+              <div style={{fontSize:48,marginBottom:12}}>🎁</div>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>선물 교환 요청</div>
+              <div style={{fontSize:14,color:C.dim,marginBottom:20}}>20,000점을 사용하여 선물을 요청할까요?</div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setGiftModal(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.dim}`,borderRadius:10,padding:"12px",fontSize:14,color:C.dim,cursor:"pointer",fontFamily:F}}>취소</button>
+                <button onClick={()=>{
+                  setCoin(c=>c-20000);
+                  fetch("/api/report",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:new Date().toISOString().split("T")[0],page:0,lesson:"GIFT",title:"선물 교환 요청",score:20000,total:20000,maxCombo:0})}).catch(()=>{});
+                  setGiftModal("success");
+                }} style={{flex:1,background:C.gold,border:"none",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700,color:"#0a0e1a",cursor:"pointer",fontFamily:F}}>요청하기</button>
+              </div>
+            </>}
+            {giftModal==="success"&&<>
+              <div style={{fontSize:48,marginBottom:12}}>🎉</div>
+              <div style={{fontSize:18,fontWeight:700,color:C.ok,marginBottom:8}}>선물 요청 완료!</div>
+              <div style={{fontSize:14,color:C.dim,marginBottom:20}}>아빠한테 알림이 갔어요! 기다려 주세요 🥰</div>
+              <button onClick={()=>setGiftModal(null)} style={{background:C.ok,border:"none",borderRadius:10,padding:"12px 24px",fontSize:14,fontWeight:700,color:"#0a0e1a",cursor:"pointer",fontFamily:F}}>확인</button>
+            </>}
+            {giftModal==="fail"&&<>
+              <div style={{fontSize:48,marginBottom:12}}>😅</div>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>아직이야!</div>
+              <div style={{fontSize:14,color:C.dim,marginBottom:8}}>20,000점이 필요해요</div>
+              <div style={{fontSize:16,fontWeight:700,color:C.gold,marginBottom:20}}>지금 {coin.toLocaleString()}점 · <span style={{color:C.no}}>{(20000-coin).toLocaleString()}점 부족</span></div>
+              <div style={{fontSize:14,color:C.dim,marginBottom:20}}>조금만 더 힘내! 할 수 있어 💪</div>
+              <button onClick={()=>setGiftModal(null)} style={{background:C.en,border:"none",borderRadius:10,padding:"12px 24px",fontSize:14,fontWeight:700,color:"#0a0e1a",cursor:"pointer",fontFamily:F}}>알겠어!</button>
+            </>}
+          </div>
+        </div>}
 
         {/* 오늘의 수업 카드 */}
         {(()=>{
