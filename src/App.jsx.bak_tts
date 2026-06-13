@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 
-const speak = (text, lang = "en-US", rate = 0.75) => {
+const speak = (text, lang = "en-US") => {
   window.speechSynthesis?.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang; u.rate = rate;
+  u.lang = lang; u.rate = 0.75;
   window.speechSynthesis?.speak(u);
 };
 const norm = s => s.replace(/[.,!?;:'"''""\-—()[\]{}…·]+/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -84,14 +84,14 @@ export default function App(){
   const target=step===0?cur.e:cur.k;
 
   useEffect(()=>{ref.current?.focus()},[phase,idx,step,fb]);
-  // 영어 문장만 천천히 읽어주기 (한글 칠 때는 읽지 않음)
+  // 4초마다 문장 읽어주기 — 영어step은 영어, 한글step은 한글
   useEffect(()=>{
     if(phase!==1)return;
-    if(step!==0)return;
-    const txt=cur.e;
+    const txt=step===0?cur.e:cur.k;
+    const lang=step===0?"en-US":"ko-KR";
     if(!txt)return;
-    speak(txt,"en-US",0.6);
-    const iv=setInterval(()=>speak(txt,"en-US",0.6),5000);
+    speak(txt,lang);
+    const iv=setInterval(()=>speak(txt,lang),4000);
     return()=>clearInterval(iv);
   },[phase,idx,step]);
 
